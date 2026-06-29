@@ -1,0 +1,13 @@
+{
+  "name": "pilates-studio-website",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pilates-Studio Website mit Adminbereich (zero-dependency Node.js)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}
