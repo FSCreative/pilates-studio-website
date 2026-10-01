@@ -38,3 +38,7 @@ node server.js
 3. **Volume** anlegen und unter `/data` mounten, dann `DATA_DIR=/data` setzen,
    damit Inhalte ein Deployment überleben.
 4. Railway erkennt Node automatisch und startet `npm start`.
+
+## Hinweis zur Erstellung
+
+Bei der Erstellung dieser Website wurden teilweise KI-gestützte Werkzeuge eingesetzt. Alle Inhalte wurden redaktionell geprüft.
