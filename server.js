@@ -280,6 +280,21 @@ function imageSrc(section) {
   return '';
 }
 
+// Statische Dateien aus ./public: Cookie-Banner (FS Consent) + lokal gehostete Schriften
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const STATIC_TYPES = { '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.woff2': 'font/woff2' };
+function serveStatic(p, res) {
+  if (p !== '/fs-consent.js' && p !== '/fs-consent.css' && !p.startsWith('/fonts/')) return false;
+  const file = path.join(PUBLIC_DIR, p);
+  const type = STATIC_TYPES[path.extname(file)];
+  if (!type || !file.startsWith(PUBLIC_DIR + path.sep)) return false;
+  let data;
+  try { data = fs.readFileSync(file); } catch (e) { return false; }
+  res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=86400' });
+  res.end(data);
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Daten-Helfer
 // ---------------------------------------------------------------------------
@@ -306,6 +321,16 @@ function publicLayout(title, content, activeSlug) {
   ).join('');
   const footer = esc(getSetting('footer_text', '© ' + new Date().getFullYear()));
   const ig = getSetting('instagram', '');
+  // Cookie-Banner (FS Consent): Info-Modus, Datenschutz/Impressum nur verlinken, wenn die Seiten existieren
+  const legal = (slugs) => { const pg = slugs.map(Q.pageBySlug).find(x => x && x.published); return pg ? '/' + pg.slug : false; };
+  const consentConfig = {
+    privacyUrl: legal(['datenschutz', 'datenschutzerklaerung']),
+    imprintUrl: legal(['impressum']),
+    tone: 'du',
+    position: 'bottom-left',
+    categories: {},
+    texts: { infoText: 'Diese Website verwendet ausschließlich technisch notwendige Cookies bzw. lokalen Speicher. Es werden keine Daten zu Werbe- oder Analysezwecken erhoben.' }
+  };
   return `<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -313,11 +338,15 @@ function publicLayout(title, content, activeSlug) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} · ${esc(siteTitle)}</title>
 <meta name="description" content="Reformer Pilates – Kleine Gruppen, persönliche Betreuung und bewusste Stärke.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/fs-consent.css">
+<script type="application/json" id="fs-consent-config">${JSON.stringify(consentConfig).replace(/</g, '\\u003c')}</script>
 <style>
 :root{--accent:${accent};--accent2:${accent2};--bg:#faf7f2;--bg2:#f1ebe2;--ink:#3b3631;--muted:#7a726a;}
+/* Cookie-Banner (FS Consent) im Design der Seite */
+:root{--fsc-bg:#faf7f2;--fsc-fg:#3b3631;--fsc-muted:#544c45;--fsc-accent:color-mix(in srgb,var(--accent) 75%,#000);--fsc-accent-fg:#fff;
+  --fsc-border:#ece4d8;--fsc-radius:6px;--fsc-btn-radius:0;--fsc-font:'Jost',system-ui,sans-serif;--fsc-heading-font:'Cormorant Garamond',serif;
+  --fsc-heading-weight:500;--fsc-btn-transform:uppercase;--fsc-btn-spacing:.16em;--fsc-btn-weight:400;--fsc-shadow:0 18px 50px rgba(60,50,40,.18)}
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{font-family:'Jost',system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.7;font-weight:300}
@@ -402,9 +431,10 @@ footer .small{font-size:13px;opacity:.8;margin-top:14px}
 ${content}
 <footer><div class="wrap">
   <a href="/" class="brand">${esc(siteTitle)}</a>
-  ${ig ? `<a href="${esc(ig)}" target="_blank" rel="noopener">Instagram</a>` : ''}
+  ${ig ? `<a href="${esc(ig)}" target="_blank" rel="noopener">Instagram</a> &nbsp;·&nbsp; ` : ''}<a href="#cookie-einstellungen">Cookie-Einstellungen</a>
   <div class="small">${footer}</div>
 </div></footer>
+<script src="/fs-consent.js" defer></script>
 </body></html>`;
 }
 
@@ -767,6 +797,7 @@ const server = http.createServer(async (req, res) => {
       return res.end(Buffer.from(m.data));
     }
     if (p === '/health') return send(res, 200, 'ok', { 'Content-Type': 'text/plain' });
+    if ((method === 'GET' || method === 'HEAD') && serveStatic(p, res)) return;
 
     // ===================== ADMIN =====================
     if (p === '/admin/login') {
