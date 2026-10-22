@@ -119,10 +119,10 @@ function seed() {
   insSec.run(home, 'hero', 'shine studio',
     'Reformer Pilates · Dein Raum für Stärke, Ruhe & innere Balance',
     'Kleine Gruppen · Persönliche Begleitung · Zeit nur für dich',
-    'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1600&q=80', 0);
+    '/img/hero-reformer.jpg', 0);
   insSec.run(home, 'text', 'Was ist Reformer Pilates?', '',
     'Reformer Pilates verbindet effektives Ganzkörpertraining mit kontrollierten, gelenkschonenden Bewegungen. Es stärkt die Tiefenmuskulatur, verbessert die Haltung und fördert Balance, Kraft und Beweglichkeit – für einen starken Körper und einen klaren Kopf.\n\nBei uns geht es dabei nicht nur um Bewegung, sondern auch um bewusste Me-Time – eine Auszeit nur für dich und deinen Körper.',
-    'https://images.unsplash.com/photo-1599447421416-3414500d18a5?auto=format&fit=crop&w=1200&q=80', 1);
+    '/img/reformer-pilates.jpg', 1);
   insSec.run(home, 'features', 'Warum bei uns trainieren?', '',
     'Kleine Gruppen|In Gruppen von max. 6 Personen bekommst du echte, persönliche Aufmerksamkeit.\nPersönliche Begleitung|Jede Übung wird auf dein Niveau und deine Ziele abgestimmt.\nBewusste Stärke|Wir verbinden Kraft und Achtsamkeit – für Körper und Kopf.',
     '', 2);
@@ -143,7 +143,7 @@ function seed() {
   const ueber = insPage.run('ueber-mich', 'Über mich', 'Über mich', 2, 1, 1).lastInsertRowid;
   insSec.run(ueber, 'text', 'Über mich', 'By Lorena',
     'Ich bin zertifizierte Reformer-Pilates-Trainerin und habe mein Studio aus einer einfachen Überzeugung gegründet: Bewegung darf sich gut anfühlen.\n\nIn meinen Stunden verbinde ich präzise Technik mit einer warmen, persönlichen Atmosphäre. Mir ist wichtig, dass du dich gesehen fühlst – und dass du nach jeder Stunde stärker und klarer gehst, als du gekommen bist.',
-    'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80', 0);
+    '/img/ueber-mich.jpg', 0);
 
   // KONTAKT
   const kontakt = insPage.run('kontakt', 'Kontakt', 'Kontakt', 3, 1, 1).lastInsertRowid;
@@ -152,6 +152,24 @@ function seed() {
   insSec.run(kontakt, 'contact', '', '', '', '', 1);
 }
 seed();
+
+// ---------------------------------------------------------------------------
+// Migration: frühere Seed-Bilder von images.unsplash.com auf lokale Kopien
+// (public/img) umstellen. Idempotent – ersetzt nur exakt diese drei alten
+// Seed-URLs; im Admin selbst gesetzte Bilder bleiben unverändert.
+// ---------------------------------------------------------------------------
+const LEGACY_SEED_IMAGES = {
+  'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1600&q=80': '/img/hero-reformer.jpg',
+  'https://images.unsplash.com/photo-1599447421416-3414500d18a5?auto=format&fit=crop&w=1200&q=80': '/img/reformer-pilates.jpg',
+  'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80': '/img/ueber-mich.jpg'
+};
+function migrateSeedImages() {
+  const upd = db.prepare('UPDATE sections SET image_url = ? WHERE image_url = ?');
+  let n = 0;
+  for (const [oldUrl, newUrl] of Object.entries(LEGACY_SEED_IMAGES)) n += Number(upd.run(newUrl, oldUrl).changes || 0);
+  if (n) console.log('[migration] ' + n + ' Seed-Bild(er) von images.unsplash.com auf lokale Kopien umgestellt.');
+}
+migrateSeedImages();
 
 // ---------------------------------------------------------------------------
 // Sessions (in-memory) + CSRF
@@ -280,11 +298,14 @@ function imageSrc(section) {
   return '';
 }
 
-// Statische Dateien aus ./public: Cookie-Banner (FS Consent) + lokal gehostete Schriften
+// Statische Dateien aus ./public: Cookie-Banner (FS Consent), lokal gehostete Schriften und Bilder
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const STATIC_TYPES = { '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.woff2': 'font/woff2' };
+const STATIC_TYPES = {
+  '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.woff2': 'font/woff2',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'
+};
 function serveStatic(p, res) {
-  if (p !== '/fs-consent.js' && p !== '/fs-consent.css' && !p.startsWith('/fonts/')) return false;
+  if (p !== '/fs-consent.js' && p !== '/fs-consent.css' && !p.startsWith('/fonts/') && !p.startsWith('/img/')) return false;
   const file = path.join(PUBLIC_DIR, p);
   const type = STATIC_TYPES[path.extname(file)];
   if (!type || !file.startsWith(PUBLIC_DIR + path.sep)) return false;
@@ -328,8 +349,7 @@ function publicLayout(title, content, activeSlug) {
     imprintUrl: legal(['impressum']),
     tone: 'du',
     position: 'bottom-left',
-    categories: {},
-    texts: { infoText: 'Diese Website verwendet ausschließlich technisch notwendige Cookies bzw. lokalen Speicher. Es werden keine Daten zu Werbe- oder Analysezwecken erhoben.' }
+    categories: {}
   };
   return `<!DOCTYPE html>
 <html lang="de">
